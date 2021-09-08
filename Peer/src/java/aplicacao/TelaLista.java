@@ -5,22 +5,26 @@
  */
 package aplicacao;
 
-import Controle.TorrentFilesManage;
+import static aplicacao.TelaPrincipal.listaArquivos;
+
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
-import Modelo.Arquivo;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
+import javax.swing.table.DefaultTableModel;
+
 import com.google.gson.Gson;
+import com.google.gson.JsonSyntaxException;
+
 import Controle.Conexao;
+import Controle.TorrentFilesManage;
+import Modelo.Arquivo;
 import Modelo.ArquivoDownload;
 import Modelo.Listas;
 import Modelo.PeerModelo;
-import static aplicacao.TelaPrincipal.listaArquivos;
-import com.google.gson.JsonSyntaxException;
-import java.io.IOException;
-import java.security.NoSuchAlgorithmException;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-import javax.swing.table.DefaultTableModel;
 
 /**
  *
@@ -221,28 +225,16 @@ public class TelaLista extends javax.swing.JPanel {
     }//GEN-LAST:event_btnAtualizarMouseClicked
 
     public TelaLog telaLog = new TelaLog();
-    private void btnDownloadMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_btnDownloadMouseClicked
-        int linha = tblListaDeArquivos.getSelectedRow();
-        String nomeArquivo = tblListaDeArquivos.getModel().getValueAt(linha, 0).toString();
-        Arquivo arquivo = new Arquivo();
-        for(int i = 0; i < arquivos.size(); i++){
-            if(arquivos.get(i).getNome().equals(nomeArquivo)){
-                arquivo = arquivos.get(i);
-            }
-        }
-        
-        
-        //PREPARANDO PEERS PARA CONEXAO
-        int    tamanho_vetor   = 200;//arquivo.getTamanhoVetor();
+    private void prepararServidor(Arquivo arquivo, int[] v1, int valor){
+        int    tamanho   = valor;//arquivo.getTamanhoVetor();
         int    numero_peers    = arquivo.getPeer().size();
         int    l               = 0;
-        int[]  vetor_principal = new int[tamanho_vetor];
-        byte[] vetor_final;
-        int    tamanho_bloco   = (int) tamanho_vetor / (numero_peers * 5);
+        int[]  vetor_p1 = v1;
+        int    tamanho_bloco   = (int) tamanho / (numero_peers * 5);
         
         int progress = 0;
         barra.setMinimum(0);
-        barra.setMaximum(tamanho_vetor-1);
+        barra.setMaximum(tamanho-1);
         barra.setValue(0);
         barra.setStringPainted(true);
         
@@ -256,18 +248,18 @@ public class TelaLista extends javax.swing.JPanel {
             peer.setDisponibilidade(true);
             peers.add(peer);
         }
-        
-        for(int i = 0; i < vetor_principal.length; i++){
-            vetor_principal[i] = 200;
+        for(int i = 0; i < vetor_p1.length; i++){
+            vetor_p1[i] = 200;
         }
+
         telaLog.logArea.append("fazendo download...\n");
         telaLog.logArea.append("Arquivo: " + arquivo.getNome());
         telaLog.logArea.append("Tamanho: " + arquivo.getTamanhoArquivo());
         System.out.println("fazendo download...\n");
         System.out.println("Arquivo: " + arquivo.getNome());
         System.out.println("Tamanho: " + arquivo.getTamanhoArquivo());
-        for(int i = 0; i < vetor_principal.length; i++){
-            if(vetor_principal[i] < -128 || vetor_principal[i] > 127){
+        for(int i = 0; i < vetor_p1.length; i++){
+            if(vetor_p1[i] < -128 || vetor_p1[i] > 127){
                 for(int j = 0; j < numero_peers; j++){
                     if(peers.get(j).getDisponibilidade()){
                         int ii = i;
@@ -297,8 +289,8 @@ public class TelaLista extends javax.swing.JPanel {
                                             telaLog.logArea.append("hash vetor ok: pacote " + inicio_bloco);
                                             System.out.println("hash vetor ok: pacote " + inicio_bloco);
                                             for(int k = 0; k < vetor_menor.length; k++){
-                                                if(inicio_bloco < tamanho_vetor){
-                                                    vetor_principal[inicio_bloco] = vetor_menor[k];
+                                                if(inicio_bloco < tamanho){
+                                                    vetor_p1[inicio_bloco] = vetor_menor[k];
                                                     inicio_bloco++;
                                                 }
                                             }
@@ -306,8 +298,8 @@ public class TelaLista extends javax.swing.JPanel {
                                         }else{
                                             System.out.println("not");
                                             for(int k = 0; k < vetor_menor.length; k++){
-                                                if(inicio_bloco < tamanho_vetor){
-                                                    vetor_principal[inicio_bloco] = -200;
+                                                if(inicio_bloco < tamanho){
+                                                    vetor_p1[inicio_bloco] = -200;
                                                     inicio_bloco++;
                                                 }
                                             }
@@ -341,11 +333,9 @@ public class TelaLista extends javax.swing.JPanel {
             progress++;
             barra.setStringPainted(true);
             barra.setValue(progress);
-            telaLog.logArea.append(barra.getString()+"\n");
         }
-     
-        
-        //VERIFICANDO SE AS THREADS JA ENCERRARAM
+    }
+    private void verificarThreads(){
         int indice = listaThreads.size();
         while(indice > 0){
             for(int i = 0; i < listaThreads.size(); i++){
@@ -360,27 +350,26 @@ public class TelaLista extends javax.swing.JPanel {
         barra.setStringPainted(false);
         telaLog.logArea.append("download feito!\n");
         System.out.println("download feito!\n");
-        
-        //SALVANDO ARQUIVO DO DOWNLOAD
-        vetor_final = new byte[vetor_principal.length];
-        
-        for(int i = 0; i < vetor_principal.length; i++){
-            vetor_final[i] = (byte) vetor_principal[i];
+    }
+    private void salvarArquivo(Arquivo arquivo, int[] v1, byte[] v2){
+
+        for(int i = 0; i < v1.length; i++){
+            v2[i] = (byte) v1[i];
         }
         telaLog.logArea.append("verificando...");
         System.out.println("verificando...");
         try {
-            if(new TorrentFilesManage().getHashCode(vetor_final).equals(arquivo.getHashArquivo())){
-                new TorrentFilesManage().createFileFromByteArray("C://ThorEnt//" + arquivo.getNome(), vetor_final);
+            if(new TorrentFilesManage().getHashCode(v2).equals(arquivo.getHashArquivo())){
+                new TorrentFilesManage().createFileFromByteArray("C://ThorEnt//" + arquivo.getNome(), v2);
                 System.out.println("ok");
                 System.out.println("salvo!");
             }else{
                 telaLog.logArea.append("Hash incorreto");
                 telaLog.logArea.append("Hash esperado: " + arquivo.getHashArquivo());
-                telaLog.logArea.append("Hash do arquivo baixado: " + new TorrentFilesManage().getHashCode(vetor_final));
+                telaLog.logArea.append("Hash do arquivo baixado: " + new TorrentFilesManage().getHashCode(v2));
                 System.out.println("Hash incorreto");
                 System.out.println("Hash esperado: " + arquivo.getHashArquivo());
-                System.out.println("Hash do arquivo baixado: " + new TorrentFilesManage().getHashCode(vetor_final));
+                System.out.println("Hash do arquivo baixado: " + new TorrentFilesManage().getHashCode(v2));
             }
             //new TorrentFilesManage().createFileFromByteArray("C://ThorEnt//testando.jpg", vetor_final);
         } catch (Exception ex) {
@@ -388,7 +377,24 @@ public class TelaLista extends javax.swing.JPanel {
             System.out.println("Salvar arquivo: " + ex.getMessage());
             Logger.getLogger(TelaLista.class.getName()).log(Level.SEVERE, null, ex);
         }
-        
+
+    }
+    private void btnDownloadMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_btnDownloadMouseClicked
+        int    tamanho_vetor   = 200;
+        int[]  vetor_principal = new int[tamanho_vetor];
+        byte[] vetor_final = new byte[vetor_principal.length];
+        int linha = tblListaDeArquivos.getSelectedRow();
+        String nomeArquivo = tblListaDeArquivos.getModel().getValueAt(linha, 0).toString();
+        Arquivo arquivo = new Arquivo();
+        for(int i = 0; i < arquivos.size(); i++){
+            if(arquivos.get(i).getNome().equals(nomeArquivo)){
+                arquivo = arquivos.get(i);
+            }
+        }
+        prepararServidor(arquivo,vetor_principal,tamanho_vetor);
+        telaLog.logArea.append(barra.getString()+"\n");
+        verificarThreads();
+        salvarArquivo(arquivo, vetor_principal, vetor_final);
         atualizar();
         
     }//GEN-LAST:event_btnDownloadMouseClicked
